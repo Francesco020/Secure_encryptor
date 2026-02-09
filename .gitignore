@@ -23,3 +23,6 @@ Thumbs.db
 # Logs and temporary files
 *.log
 *.tmp
+
+# Private documentatio
+Docs_private/
