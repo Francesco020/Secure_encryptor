@@ -33,23 +33,27 @@ def encrypt_file(input_path: str,output_path: str, password: str) -> None:
         f.write(token)
         
     os.replace(tmp, output_path)
-        
-    print(f"File encrypted successfully: {output_path}")
     
-def decrypt_file(input_file: str, key: bytes):
-    with open(input_file, "rb") as f:
-        encrypted_data = f.read()
+def decrypt_file(input_path: str, output_path: str, password: str) -> None:
+    with open(input_path, "rb") as f:
+        blob = f.read()
     
-    fernet = Fernet(key)
+    if len(blob) < len(MAGIC) + SALT_LEN or blob[:4] != MAGIC:
+        raise ValueError("Formato file non riconosciuto (header MAGIC mancante).")
+    
+    salt = blob[4:4 + SALT_LEN]
+    token = blob[4 + SALT_LEN:]
+    
+    key = derive_key(password, salt)
     
     try:
-        decrypted_data = fernet.decrypt(encrypted_data)
+        data = Fernet(key).decrypt(token)
     except InvalidToken:
-        print("Invalid password or corrupted file")
-        return
+        raise ValueError("Password errata o file corrotto.") from None
         
-    with open(input_file, "wb") as f:
-        f.write(decrypted_data)
+    tmp = output_path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
         
-    print(f"File decrypted successfuly: {input_file}")  
+    os.replace(tmp, output_path)
     
