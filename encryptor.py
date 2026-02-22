@@ -1,35 +1,40 @@
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.fernet import Fernet
 import base64
 import os
 
-def derive_key(password: str, salt: bytes): 
+MAGIC = b"FER1"
+SALT_LEN = 16
+PBKDF2_ITERS = 300_000
+
+def derive_key(password: str, salt: bytes, iterations: int = PBKDF2_ITERS) -> bytes: 
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt,
-        iterations=100_000,
-        backend=default_backend()
+        iterations=iterations,
     )
-    return base64.urlsafe_b64encode(kdf.derive(password.encode()))
+    return base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
 
-def encrypt_file(input_file: str, key: bytes):
-    with open(input_file, "rb") as f:
+def encrypt_file(input_path: str,output_path: str, password: str) -> None:
+    with open(input_path, "rb") as f:
         data = f.read()
-        
-    fernet = Fernet(key)
     
-    encrypted_data = fernet.encrypt(data)
+    salt = os.random(SALT_LEN)
+    key = derive_key(password, salt)
+    token = Fernet(key).encrypt(data)
     
-    temp_file = input_file + ".enc"
-    with open(temp_file, "wb") as f:
-        f.write(encrypted_data)
+    tmp = output_path + ".enc"
+    with open(tmp, "wb") as f:
+        f.write(MAGIC)
+        f.write(salt)
+        f.write(token)
         
-    os.replace(temp_file, input_file)
+    os.replace(tmp, output_path)
         
-    print(f"File encrypted successfully: {input_file}")
+    print(f"File encrypted successfully: {output_path}")
     
 def decrypt_file(input_file: str, key: bytes):
     with open(input_file, "rb") as f:
@@ -39,30 +44,12 @@ def decrypt_file(input_file: str, key: bytes):
     
     try:
         decrypted_data = fernet.decrypt(encrypted_data)
-    except Exception:
+    except InvalidToken:
         print("Invalid password or corrupted file")
         return
         
     with open(input_file, "wb") as f:
         f.write(decrypted_data)
         
-    print(f"File decrypted successfuly: {input_file}")
-    
-def main():
-    mode = input("Choose mode (encrypt/decrypt)")
-    file = input("Insert file name:")
-    password = input("Insert password: ")
-    
-    salt = b"1234567890123456"
-    key = derive_key(password, salt)
-    
-    if mode == "encrypt":
-        encrypt_file(file, key)
-    elif mode == "decrypt":
-        decrypt_file(file, key)
-    else:
-        print("Invalid mode")
-        
-if __name__ == "__main__":
-    main()
+    print(f"File decrypted successfuly: {input_file}")  
     
